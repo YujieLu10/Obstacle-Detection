@@ -9,3 +9,6 @@ experiments result
 
 ### caffe2mxnet
 mxnet network scripts for caffe model converting to mxnet
+
+### DataFormat Tool
+some scripts for dataformat
