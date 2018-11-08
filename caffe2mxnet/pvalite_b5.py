@@ -141,6 +141,8 @@ class pvalite_b5(Symbol):
         proposal, rpn_scores = mx.sym.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16,
         rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
 
+        #rpn_loss_cls =
+        #mute_rpn_scores = ?
         if is_train:
             group = mx.sym.Group([rpn_cls_prob, rpn_loss_bbox])
         else:
@@ -149,19 +151,37 @@ class pvalite_b5(Symbol):
 
 
         #roi_data python?
-        roi_pool_conv5 = mx.sym.ROIPooling(data = ,rois=, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
+        #roi_data = 
+        roi_pool_conv5 = mx.sym.ROIPooling(data = data,rois = roi_data, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
 
-        fc6_L = mx.sym.FullyConnected(name='fc6_L', data=roi_pool_conv5)
-
-        fc6_U = mx.sym.FullyConnected(name = 'fc6_U', data = fc6_L)
+        #fc6_L = mx.sym.FullyConnected(name='fc6_L', data=roi_pool_conv5)
+        fc6_L = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type:\"InnerProduct\" inner_product_param {num_output: 512}}")
+        #fc6_U = mx.sym.FullyConnected(name = 'fc6_U', data = fc6_L)
+        fc6_U = mx.sym.CaffeOp(data_0=fc6_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
         relu6 = mx.sym.Activation(data = fc6_U, act_type = 'relu', name = 'relu6')
 
-        fc7_L = mx.sym.FullyConnected(name = 'fc7_L', data = relu6)
-
-        fc7_U = mx.sym.FullyConnected(name = 'fc7_U', data = fc7_L)
+        #fc7_L = mx.sym.FullyConnected(name = 'fc7_L', data = relu6)
+        fc7_L = mx.sym.CaffeOp(data_0=relu6, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
+        #fc7_U = mx.sym.FullyConnected(name = 'fc7_U', data = fc7_L)
+        fc7_U = mx.sym.CaffeOp(data_0=fc7_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
         relu7 = mx.sym.FullyConnected(name = 'relu7', data = fc7_U)
 
+        cls_score_fabu = mx.sym.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
+        bbox_pred_fabu = mx.sym.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
+        #loss_cls = softmaxwithloss
+        #label -> labels -> roi-data/labels
+        loss_cls = mx.sym.CaffeLoss(data = cls_score_fabu, label = label, grad_scale = 1, name='loss_cls', prototxt="layer{type:\"SoftmaxWithLoss\"}")
+        #num_weight=?
+        #loss_bbox = ? smoothl1loss
 
+        fc6_L_kp = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 512}}")
+        fc6_U_kp = mx.sym.CaffeOp(data_0=fc6_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        relu6_kp = mx.sym.Activation(data=fc6_U_kp, act_type='relu', name='relu6_kp')
+        fc7_L_kp = mx.sym.CaffeOp(data_0=relu6_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
+        fc7_U_kp = mx.sym.CaffeOp(data_0=fc7_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        relu7_kp = mx.sym.Activation(data=fc6_U_kp, act_type='relu', name='relu7_kp')
+        pred_3d = mx.sym.CaffeOp(data_0=relu7_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 64}}")
+        #loss_3d = smoothl1loss
         return group
 
     def init_weight_rcnn(self, cfg, arg_params, aux_params):
