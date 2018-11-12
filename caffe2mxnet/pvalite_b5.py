@@ -68,13 +68,18 @@ class pvalite_b5(Symbol):
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
         filter_list = [96, 128, 128]
-        data = mx.sym.Variable(name="data")
-        #label??
-        rpn_label = mx.sym.Variable(name='label')
-        im_info = mx.sym.Variable(name='im_info')
-        rpn_bbox_weight = mx.sym.Variable('bbox_weight')
-        rpn_bbox_target = mx.sym.Variable(name='bbox_target')
-        im_ids = mx.sym.Variable(name='im_ids')
+        if is_train:
+            data = mx.sym.Variable(name="data")
+            rpn_label = mx.sym.Variable(name='label')
+            rpn_bbox_target = mx.sym.Variable(name='bbox_target')
+            rpn_bbox_weight = mx.sym.Variable(name='bbox_weight')
+            gt_boxes = mx.sym.Variable(name='gt_boxes')
+            #valid_ranges = mx.sym.Variable(name='valid_ranges')
+            im_info = mx.sym.Variable(name='im_info')
+        else:
+            data = mx.sym.Variable(name="data")
+            im_info = mx.sym.Variable(name='im_info')
+            im_ids = mx.sym.Variable(name='im_ids')
 
         conv1 = mx.sym.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=False, workspace=workspace, name='conv1')
 
@@ -94,6 +99,7 @@ class pvalite_b5(Symbol):
         inc3_middle = relu3
         inc3_right = conv3
         conv3_down2 = mx.symbol.Pooling(data=conv3, kernel=(3, 3), stride=(2, 2), pad=(0, 0), pool_type='max')
+        inc3e = conv3
         #incleft
         for i in range (num_stage):
             print(stage_num[i])
@@ -107,16 +113,17 @@ class pvalite_b5(Symbol):
                 inc3_left = self.inc3_unit_left(inc3_left if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_middle = self.inc3_unit_middle(inc3_middle if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_right = self.inc3_unit_right(inc3_right if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc_concat = mx.sym.concat(inc3_left, inc3_middle, inc3_right, dim=3)
+                inc_concat = mx.sym.concat(*[inc3_left, inc3_middle, inc3_right],name='inc_concat')
                 #inc_concat = mx.sym.concat()
                 if stage_char == 'e' and stage_num == '3':
                     inc3e = inc_concat
+                    print('>>>>> inc3e = inc_concat')
                 
         #concat
-        concat = mx.sym.concat(conv3_down2, inc_concat, inc3e)
+        concat = mx.sym.concat(*[conv3_down2, inc_concat, inc3e], name='concat')
 
         #convf/reluf
-        convf = mx.sym.FullyConnected(name='convf', data = concat, lr_mult={0.1, 0.2})
+        convf = mx.sym.Convolution(data = concat, num_filter=256, kernel=(1,1), stride=(1,1), pad=(0,0), no_bias = False,  workspace=self.workspace, name='convf')
         reluf = mx.sym.Activation(data = convf, act_type='relu', name='reluf')
 
         #grad_scale
@@ -132,7 +139,7 @@ class pvalite_b5(Symbol):
         rpn_bbox_pred_fabu = mx.sym.Convolution(data=rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=196,name='rpn_bbox_pred_fabu')
 
         # generate anchor ?
-        rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
+        #rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
         #rpn_loss_bbox
         rpn_loss_bbox = rpn_bbox_weight * mx.sym.smooth_l1(name='rpn_loss_bbox',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
         rpn_loss_bbox = mx.sym.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
@@ -155,35 +162,46 @@ class pvalite_b5(Symbol):
 
         #roi_data python?
         #roi_data = 
-        roi_pool_conv5 = mx.sym.ROIPooling(data = data,rois = roi_data, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
+        roi_pool_conv5 = mx.sym.ROIPooling(data = data, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
 
-        #fc6_L = mx.sym.FullyConnected(name='fc6_L', data=roi_pool_conv5)
-        fc6_L = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type:\"InnerProduct\" inner_product_param {num_output: 512}}")
-        #fc6_U = mx.sym.FullyConnected(name = 'fc6_U', data = fc6_L)
-        fc6_U = mx.sym.CaffeOp(data_0=fc6_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        fc6_L = mx.sym.FullyConnected(name='fc6_L', data=roi_pool_conv5, num_hidden=512)
+        #fc6_L = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type:\"InnerProduct\" inner_product_param {num_output: 512}}")
+        fc6_U = mx.sym.FullyConnected(name = 'fc6_U', data = fc6_L, num_hidden=4096)
+        #fc6_U = mx.sym.CaffeOp(data_0=fc6_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
         relu6 = mx.sym.Activation(data = fc6_U, act_type = 'relu', name = 'relu6')
 
-        #fc7_L = mx.sym.FullyConnected(name = 'fc7_L', data = relu6)
-        fc7_L = mx.sym.CaffeOp(data_0=relu6, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
-        #fc7_U = mx.sym.FullyConnected(name = 'fc7_U', data = fc7_L)
-        fc7_U = mx.sym.CaffeOp(data_0=fc7_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
-        relu7 = mx.sym.FullyConnected(name = 'relu7', data = fc7_U)
+        fc7_L = mx.sym.FullyConnected(name = 'fc7_L', data = relu6, num_hidden=128)
+        #fc7_L = mx.sym.CaffeOp(data_0=relu6, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
+        fc7_U = mx.sym.FullyConnected(name = 'fc7_U', data = fc7_L, num_hidden=4096)
+        #fc7_U = mx.sym.CaffeOp(data_0=fc7_L, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        #relu7 = mx.sym.FullyConnected(name = 'relu7', data = fc7_U)
+        relu7 = mx.sym.Activation(data=fc7_U, act_type = 'relu', name='relu7')
 
-        cls_score_fabu = mx.sym.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
-        bbox_pred_fabu = mx.sym.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
+        cls_score_fabu = mx.sym.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=8)
+        bbox_pred_fabu = mx.sym.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
+        #cls_score_fabu = mx.sym.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
+        #bbox_pred_fabu = mx.sym.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
+        
         #loss_cls = softmaxwithloss
         #label -> labels -> roi-data/labels
-        loss_cls = mx.sym.CaffeLoss(data = cls_score_fabu, label = label, grad_scale = 1, name='loss_cls', prototxt="layer{type:\"SoftmaxWithLoss\"}")
+
+        #loss_cls = 
+        #loss_cls = mx.sym.CaffeLoss(data = cls_score_fabu, label = label, grad_scale = 1, name='loss_cls', prototxt="layer{type:\"SoftmaxWithLoss\"}")
         #num_weight=?
         #loss_bbox = ? smoothl1loss
 
-        fc6_L_kp = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 512}}")
-        fc6_U_kp = mx.sym.CaffeOp(data_0=fc6_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        fc6_L_kp = mx.sym.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=512)
+        #fc6_L_kp = mx.sym.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 512}}")
+        fc6_U_kp = mx.sym.FullyConnected(name = 'cls_score_fabu', data = fc6_L_kp, num_hidden=4096)
+        #fc6_U_kp = mx.sym.CaffeOp(data_0=fc6_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
         relu6_kp = mx.sym.Activation(data=fc6_U_kp, act_type='relu', name='relu6_kp')
-        fc7_L_kp = mx.sym.CaffeOp(data_0=relu6_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
-        fc7_U_kp = mx.sym.CaffeOp(data_0=fc7_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
-        relu7_kp = mx.sym.Activation(data=fc6_U_kp, act_type='relu', name='relu7_kp')
-        pred_3d = mx.sym.CaffeOp(data_0=relu7_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 64}}")
+        fc7_L_kp = mx.sym.FullyConnected(name = 'cls_score_fabu', data = relu6_kp, num_hidden=128)
+        #fc7_L_kp = mx.sym.CaffeOp(data_0=relu6_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 128}}")
+        fc7_U_kp = mx.sym.FullyConnected(name = 'cls_score_fabu', data = fc7_L_kp, num_hidden=4096)
+        #fc7_U_kp = mx.sym.CaffeOp(data_0=fc7_L_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 4096}}")
+        relu7_kp = mx.sym.Activation(data=fc7_U_kp, act_type='relu', name='relu7_kp')
+        pred_3d = mx.sym.FullyConnected(name = 'cls_score_fabu', data = relu7_kp, num_hidden=64)
+        #pred_3d = mx.sym.CaffeOp(data_0=relu7_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 64}}")
         #loss_3d = smoothl1loss
         return group
 
