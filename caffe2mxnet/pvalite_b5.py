@@ -26,22 +26,22 @@ class pvalite_b5(Symbol):
         return ['bbox_pred_weight', 'bbox_pred_bias']
 
     def inc3_unit_left(self, data, name, workspace=512):
-        conv5_1 = mx.sym.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=False,workspace=workspace,name=name+'/conv5_1')
+        conv5_1 = mx.sym.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=True,workspace=workspace,name=name+'/conv5_1')
         relu5_1 = mx.sym.Activation(data=conv5_1, act_type='relu', name=name+'/relu5_1')
         if 'inc4' in name or 'inc5' in name:
-            conv5_2 = mx.sym.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv5_2')
+            conv5_2 = mx.sym.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_2')
             relu5_2 = mx.sym.Activation(data=conv5_2, act_type='relu', name=name+'/relu5_2')
-            conv5_3 = mx.sym.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv5_3')
+            conv5_3 = mx.sym.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
             relu5_3 = mx.sym.Activation(data=conv5_3, act_type='relu', name=name+'/relu5_3')
         else:
-            conv5_2 = mx.sym.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv5_2')
+            conv5_2 = mx.sym.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_2')
             relu5_2 = mx.sym.Activation(data=conv5_2, act_type='relu', name=name+'/relu5_2')
-            conv5_3 = mx.sym.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv5_3')
+            conv5_3 = mx.sym.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
             relu5_3 = mx.sym.Activation(data=conv5_3, act_type='relu', name=name+'/relu5_3')
         return relu5_3
 
     def inc3_unit_middle(self, data, name, workspace=512):
-        conv3_1 = mx.sym.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=False,workspace=workspace,name=name+'/conv3_1')
+        conv3_1 = mx.sym.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=True,workspace=workspace,name=name+'/conv3_1')
         relu3_1 = mx.sym.Activation(data=conv3_1,act_type='relu', name=name+'/relu3_1')
 
         if name == 'inc3a':
@@ -49,15 +49,15 @@ class pvalite_b5(Symbol):
         else:
             incstride = (1,1)
         if 'inc4' in name or 'inc5' in name:
-            conv3_2 = mx.sym.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,dilate=(2,2),pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv3_2')
+            conv3_2 = mx.sym.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_2')
             relu3_2 = mx.sym.Activation(data=conv3_2,act_type='relu', name=name+'/relu3_2')
         else:        
-            conv3_2 = mx.sym.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,pad=(1,1),no_bias=False,workspace=workspace,name=name+'/conv3_2')
+            conv3_2 = mx.sym.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_2')
             relu3_2 = mx.sym.Activation(data=conv3_2,act_type='relu', name=name+'/relu3_2')
         return relu3_2
 
     def inc3_unit_right(self, data, num_output, name, workspace=512):
-        conv1 = mx.sym.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=False,workspace=workspace,name=name+'/conv1')
+        conv1 = mx.sym.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=True,workspace=workspace,name=name+'/conv1')
         relu1 = mx.sym.Activation(data=conv1, act_type='relu', name=name+'/relu1')
         return relu1
 
@@ -81,17 +81,17 @@ class pvalite_b5(Symbol):
             im_info = mx.sym.Variable(name='im_info')
             im_ids = mx.sym.Variable(name='im_ids')
 
-        conv1 = mx.sym.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=False, workspace=workspace, name='conv1')
+        conv1 = mx.sym.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv1')
 
         relu1 = mx.sym.Activation(data=conv1, act_type='relu', name='relu1')
         
         conv2 = mx.sym.Convolution(data=relu1, num_filter = 48, kernel=(3, 3),
-        stride=(2, 2), pad=(1, 1), no_bias=False, workspace=workspace, name='conv2')
+        stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv2')
 
         relu2 = mx.sym.Activation(data=conv2, act_type='relu', name='relu2')
 
         conv3 = mx.sym.Convolution(data=relu2, num_filter = 96, kernel=(3, 3),
-        stride=(2, 2), pad=(1, 1), no_bias=False, workspace=workspace, name='conv3')
+        stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv3')
 
         relu3 = mx.sym.Activation(data=conv3, act_type='relu', name='relu3')
 
@@ -113,17 +113,21 @@ class pvalite_b5(Symbol):
                 inc3_left = self.inc3_unit_left(inc3_left if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_middle = self.inc3_unit_middle(inc3_middle if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_right = self.inc3_unit_right(inc3_right if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc_concat = mx.sym.concat(*[inc3_left, inc3_middle, inc3_right],name='inc_concat')
+                inc_concat = mx.sym.concat(*[inc3_left, inc3_middle, inc3_right])
+                print('>>>>> inc_concat')
+                mx.visualization.print_summary(inc_concat,{"data":(1,3,1056,640),"gt_boxes": (1, 100, 5), "label": (1, 23760), "bbox_target": (1, 36, 66, 40), "bbox_weight": (1, 36, 66, 40)})
                 #inc_concat = mx.sym.concat()
-                if stage_char == 'e' and stage_num == '3':
+                if stage_char[j] == 'e' and stage_num[i] == '3':
                     inc3e = inc_concat
                     print('>>>>> inc3e = inc_concat')
-                
+        print('>>>>> conv3_down2') 
+        mx.visualization.print_summary(conv3_down2)
         #concat
-        concat = mx.sym.concat(*[conv3_down2, inc_concat, inc3e], name='concat')
-
+        print('>>>>> concat conv3_down2 inc_concat inc3e')
+        concat = mx.sym.concat(*[conv3_down2, inc_concat, inc3e])
+        mx.visualization.print_summary(concat)
         #convf/reluf
-        convf = mx.sym.Convolution(data = concat, num_filter=256, kernel=(1,1), stride=(1,1), pad=(0,0), no_bias = False,  workspace=self.workspace, name='convf')
+        convf = mx.sym.Convolution(data = concat, num_filter=256, kernel=(1,1), stride=(1,1), pad=(0,0), no_bias = True,  workspace=self.workspace, name='convf')
         reluf = mx.sym.Activation(data = convf, act_type='relu', name='reluf')
 
         #grad_scale
@@ -134,7 +138,7 @@ class pvalite_b5(Symbol):
 
         rpn_conv1 = mx.sym.Convolution(data = convf, kernel=(1,1),pad=(0,0),num_filter=256,name='rpn_conv1')
         rpn_relu1 = mx.sym.Activation(data = rpn_conv1, act_type='relu', name='rpn_relu1')
-        rpn_cls_score_fabu = mx.sym.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=98,name='rpn_conv1')
+        rpn_cls_score_fabu = mx.sym.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=98,name='rpn_cls_score_fabu')
         rpn_cls_score_reshape = mx.sym.Reshape(data = rpn_cls_score_fabu, shape=(0,2,-1,0),name='rpn_cls_score_reshape')
         rpn_bbox_pred_fabu = mx.sym.Convolution(data=rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=196,name='rpn_bbox_pred_fabu')
 
@@ -153,8 +157,9 @@ class pvalite_b5(Symbol):
 
         #rpn_loss_cls =
         #mute_rpn_scores = ?
+        rcnn_label = label
         if is_train:
-            group = mx.sym.Group([rpn_cls_prob, rpn_loss_bbox])
+            group = mx.sym.Group([rpn_cls_prob, rpn_loss_bbox,rpn_cls_prob_reshape, rpn_loss_bbox, mx.sym.BlockGrad(rcnn_label)])
         else:
             group = mx.sym.Group([proposal, rpn_scores, im_ids])
         self.sym = group
@@ -203,6 +208,7 @@ class pvalite_b5(Symbol):
         pred_3d = mx.sym.FullyConnected(name = 'cls_score_fabu', data = relu7_kp, num_hidden=64)
         #pred_3d = mx.sym.CaffeOp(data_0=relu7_kp, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 64}}")
         #loss_3d = smoothl1loss
+        self.sym = group
         return group
 
     def init_weight_rcnn(self, cfg, arg_params, aux_params):
@@ -214,48 +220,48 @@ class pvalite_b5(Symbol):
         for i in range (num_stage - 1):
             for j in range (char_stage - 1):
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv5_1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/relu5_1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv5_2'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/relu5_2'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv5_3'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv3_1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/relu3_1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv3_2'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/relu3_2'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/conv1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
                 name = 'inc' + stage_num[i] + stage_char[j] + '/relu1'
-                arg_params[name + '_weight'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_weight']) * 0.1
-                arg_params[name + '_bias'] = mx.nd.ones(shape=self.arg_shape_dict[name + '_bias']) * 0.1
+                arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
+                arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
     
     def init_weight_rpn(self, cfg, arg_params, aux_params):
-        #arg_params['rpn_conv1_weight'] = 
-        arg_params['rpn_conv1_bias'] = mx.nd.ones(shape=self.arg_shape_dict['rpn_conv1_bias']) * 0.1
+        arg_params['rpn_conv1_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_conv1_weight'])
+        arg_params['rpn_conv1_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_conv1_bias'])
 
-        #arg_params['rpn_conv1_weight'] = 
-        arg_params['rpn_conv1_bias'] = mx.nd.ones(shape=self.arg_shape_dict['rpn_conv1_bias']) * 0.1
+        arg_params['rpn_cls_score_fabu_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_cls_score_fabu_weight'])
+        arg_params['rpn_cls_score_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_fabu_bias'])
 
-        #arg_params['rpn_bbox_pred_fabu_weight'] = 
-        arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.ones(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias']) * 0.1
+        arg_params['rpn_bbox_pred_fabu_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
+        arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias'])
     
     def init_weight(self, cfg, arg_params, aux_params):
         self.init_weight_rcnn(cfg, arg_params, aux_params)
