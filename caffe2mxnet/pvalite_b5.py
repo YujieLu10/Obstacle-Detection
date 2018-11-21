@@ -68,18 +68,17 @@ class pvalite_b5(Symbol):
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
         filter_list = [96, 128, 128]
-        im_info = mx.symbol.Variable(name='im_info')
         if is_train:
             data = mx.symbol.Variable(name="data")
             rpn_label = mx.symbol.Variable(name='label')
             rpn_bbox_target = mx.symbol.Variable(name='bbox_target')
             rpn_bbox_weight = mx.symbol.Variable(name='bbox_weight')
             gt_boxes = mx.symbol.Variable(name='gt_boxes')
-            #valid_ranges = mx.symbol.Variable(name='valid_ranges')
-            #im_info = mx.symbol.Variable(name='im_info')
+            valid_ranges = mx.symbol.Variable(name='valid_ranges')
+            im_info = mx.symbol.Variable(name='im_info')
         else:
             data = mx.symbol.Variable(name="data")
-            #im_info = mx.symbol.Variable(name='im_info')
+            im_info = mx.symbol.Variable(name='im_info')
             im_ids = mx.symbol.Variable(name='im_ids')
 
         conv1 = mx.symbol.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv1')
@@ -156,15 +155,16 @@ class pvalite_b5(Symbol):
         #data=(rpn_bbox_pred_fabu - rpn_bbox_target)
         #rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
         if is_train:
-            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=rpn_bbox_pred_fabu)
-
-            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
             #data=rpn_cls_score_reshape
             rpn_cls_prob = mx.symbol.SoftmaxOutput(data=rpn_cls_score_reshape, label=rpn_label, multi_output=True, normalization='valid',use_ignore=True, ignore_label=-1,name='rpn_cls_prob',grad_scale=grad_scale)
             #rpn_cls_prob
             #shae=(0, 98, -1, 0)
-            rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 98, -1, 0),name='rpn_cls_prob_reshape')
+            rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0),name='rpn_cls_prob_reshape')
             proposal, label, bbox_target, bbox_weight = mx.symbol.MultiProposalTarget(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, gt_boxes=gt_boxes, valid_ranges=valid_ranges,  batch_size=16, name='multi_proposal_target')
+            
+            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+
+            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
             
             #add from resnet_mx
             label = mx.symbol.Reshape(data=label, shape=(-1,), name='label_reshape')
@@ -199,11 +199,13 @@ class pvalite_b5(Symbol):
         relu7 = mx.symbol.Activation(data=fc7_U, act_type = 'relu', name='relu7')
 
         cls_score_fabu = mx.symbol.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=8)
-        bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
+        
+        #bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
+        bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=4)
         # add from resnet_mx
-        cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
+        cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
         num_classes = 81
-        cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
+        #cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
 
         #cls_score_fabu = mx.symbol.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
         #bbox_pred_fabu = mx.symbol.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
@@ -211,7 +213,7 @@ class pvalite_b5(Symbol):
         #loss_cls = softmaxwithloss
         #label -> labels -> roi-data/labels
         num_reg_classes = 1
-        loss_bbox_ = loss_bbox_weight * mx.sym.smooth_l1(name='loss_bbox_', scalar=1.0, data=(bbox_pred_fabu - bbox_target))
+        loss_bbox_ = bbox_weight * mx.sym.smooth_l1(name='loss_bbox_', scalar=1.0, data=(bbox_pred_fabu - bbox_target))
         loss_bbox = mx.sym.MakeLoss(name='loss_bbox', data=loss_bbox_, grad_scale=grad_scale/(188.0*16.0))
         loss_bbox = mx.sym.Reshape(data=loss_bbox, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 4 * num_reg_classes),
                                        name='loss_bbox_reshape')
@@ -248,18 +250,17 @@ class pvalite_b5(Symbol):
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
         filter_list = [96, 128, 128]
-        im_info = mx.symbol.Variable(name='im_info')
         if is_train:
             data = mx.symbol.Variable(name="data")
             rpn_label = mx.symbol.Variable(name='label')
             rpn_bbox_target = mx.symbol.Variable(name='bbox_target')
             rpn_bbox_weight = mx.symbol.Variable(name='bbox_weight')
             gt_boxes = mx.symbol.Variable(name='gt_boxes')
-            #valid_ranges = mx.symbol.Variable(name='valid_ranges')
-            #im_info = mx.symbol.Variable(name='im_info')
+            valid_ranges = mx.symbol.Variable(name='valid_ranges')
+            im_info = mx.symbol.Variable(name='im_info')
         else:
             data = mx.symbol.Variable(name="data")
-            #im_info = mx.symbol.Variable(name='im_info')
+            im_info = mx.symbol.Variable(name='im_info')
             im_ids = mx.symbol.Variable(name='im_ids')
 
         conv1 = mx.symbol.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv1')
