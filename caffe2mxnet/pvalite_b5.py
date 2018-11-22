@@ -26,7 +26,8 @@ class pvalite_b5(Symbol):
         return ['rpn_bbox_pred_fabu_weight', 'rpn_bbox_pred_fabu_bias']
 
     def inc3_unit_left(self, data, name, workspace=512):
-        conv5_1 = mx.symbol.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=True,workspace=workspace,name=name+'/conv5_1')
+        #pad = 0
+        conv5_1 = mx.symbol.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_1')
         relu5_1 = mx.symbol.Activation(data=conv5_1, act_type='relu', name=name+'/relu5_1')
         if 'inc4' in name or 'inc5' in name:
             conv5_2 = mx.symbol.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_2')
@@ -41,7 +42,8 @@ class pvalite_b5(Symbol):
         return relu5_3
 
     def inc3_unit_middle(self, data, name, workspace=512):
-        conv3_1 = mx.symbol.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=0,no_bias=True,workspace=workspace,name=name+'/conv3_1')
+        #pad = 0
+        conv3_1 = mx.symbol.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_1')
         relu3_1 = mx.symbol.Activation(data=conv3_1,act_type='relu', name=name+'/relu3_1')
 
         if name == 'inc3a':
@@ -57,7 +59,8 @@ class pvalite_b5(Symbol):
         return relu3_2
 
     def inc3_unit_right(self, data, num_output, name, workspace=512):
-        conv1 = mx.symbol.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=True,workspace=workspace,name=name+'/conv1')
+        #pad = (0,0)
+        conv1 = mx.symbol.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(1,1   ),no_bias=True,workspace=workspace,name=name+'/conv1')
         relu1 = mx.symbol.Activation(data=conv1, act_type='relu', name=name+'/relu1')
         return relu1
 
@@ -115,7 +118,7 @@ class pvalite_b5(Symbol):
                 inc3_right = self.inc3_unit_right(inc3_right if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
-                inc_concat = inc3_right
+                inc_concat = mx.symbol.concat(*[inc3_right])
                 #print('>>>>> inc_concat')
                 #mx.visualization.print_summary(inc_concat)
                 #mx.visualization.print_summary(inc_concat,{"data":(1,3,1056,640),"gt_boxes": (1, 100, 5), "label": (1, 23760), "bbox_target": (1, 36, 66, 40), "bbox_weight": (1, 36, 66, 40)})
