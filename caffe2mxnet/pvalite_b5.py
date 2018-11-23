@@ -43,15 +43,18 @@ class pvalite_b5(Symbol):
 
     def inc3_unit_middle(self, data, name, workspace=512):
         #pad = 0
-        conv3_1 = mx.symbol.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_1')
+        conv3_1 = mx.symbol.Convolution(data=data, num_filter=16,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=True,workspace=workspace,name=name+'/conv3_1')
         relu3_1 = mx.symbol.Activation(data=conv3_1,act_type='relu', name=name+'/relu3_1')
-
+        '''
         if name == 'inc3a':
-            incstride = (2,2)
+            incstride = (1,1)
         else:
             incstride = (1,1)
+        '''
+        incstride = (1,1)
+        #dilate=(2,2)
         if 'inc4' in name or 'inc5' in name:
-            conv3_2 = mx.symbol.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_2')
+            conv3_2 = mx.symbol.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,dilate=(2,2),pad=(2,2),no_bias=True,workspace=workspace,name=name+'/conv3_2')
             relu3_2 = mx.symbol.Activation(data=conv3_2,act_type='relu', name=name+'/relu3_2')
         else:        
             conv3_2 = mx.symbol.Convolution(data=relu3_1, num_filter=64,kernel=(3,3),stride=incstride,pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv3_2')
@@ -60,7 +63,8 @@ class pvalite_b5(Symbol):
 
     def inc3_unit_right(self, data, num_output, name, workspace=512):
         #pad = (0,0)
-        conv1 = mx.symbol.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(1,1   ),no_bias=True,workspace=workspace,name=name+'/conv1')
+        #kernel=(1,1)
+        conv1 = mx.symbol.Convolution(data=data, num_filter=num_output,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=True,workspace=workspace,name=name+'/conv1')
         relu1 = mx.symbol.Activation(data=conv1, act_type='relu', name=name+'/relu1')
         return relu1
 
@@ -70,6 +74,7 @@ class pvalite_b5(Symbol):
         char_stage = 5
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
+        #filter_list = [96, 128, 128]
         filter_list = [96, 128, 128]
         if is_train:
             data = mx.symbol.Variable(name="data")
@@ -98,27 +103,26 @@ class pvalite_b5(Symbol):
 
         relu3 = mx.symbol.Activation(data=conv3, act_type='relu', name='relu3')
 
-        inc3_left = conv3
-        inc3_middle = relu3
-        inc3_right = conv3
         conv3_down2 = mx.symbol.Pooling(data=conv3, kernel=(3, 3), stride=(2, 2), pad=(0, 0), pool_type='max')
         inc3e = conv3
         #incleft
         for i in range (num_stage):
             print(stage_num[i])
             #inc3/pool
-            if i == 0:
-                inc3_right = mx.symbol.Pooling(data=inc3_right, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i == 0 else 1, 0 if i == 0 else 1), pool_type='max')
-            else:
-                inc3_right = mx.symbol.Pooling(data=inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i == 0 else 1, 0 if i == 0 else 1), pool_type='max')
+            #stride=(2 if i == 0 else 1, 2 if i == 0 else 1)
+            #inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
+            inc3_right = mx.symbol.Pooling(data=conv3 if i == 0 else inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i==0 else 1, 0 if i==0 else 1), pool_type='max')
             for j in range (char_stage):
                 print(stage_char[j])
-                inc3_left = self.inc3_unit_left(inc3_left if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc3_middle = self.inc3_unit_middle(inc3_middle if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc3_right = self.inc3_unit_right(inc3_right if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_left = self.inc3_unit_left(conv3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_middle = self.inc3_unit_middle(relu3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
+                #inc3_right if j == 0 else inc_concat
+                inc3_right = self.inc3_unit_right(inc3_right, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
+                #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
+                inc_concat = mx.symbol.concat(*[inc3_right,inc3_middle])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
-                inc_concat = mx.symbol.concat(*[inc3_right])
+                #inc_concat = mx.symbol.concat(*[inc3_right, inc3_left])
                 #print('>>>>> inc_concat')
                 #mx.visualization.print_summary(inc_concat)
                 #mx.visualization.print_summary(inc_concat,{"data":(1,3,1056,640),"gt_boxes": (1, 100, 5), "label": (1, 23760), "bbox_target": (1, 36, 66, 40), "bbox_weight": (1, 36, 66, 40)})
@@ -279,10 +283,11 @@ class pvalite_b5(Symbol):
         stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv3')
 
         relu3 = mx.symbol.Activation(data=conv3, act_type='relu', name='relu3')
-
+        '''
         inc3_left = conv3
         inc3_middle = relu3
         inc3_right = conv3
+        '''
         conv3_down2 = mx.symbol.Pooling(data=conv3, kernel=(3, 3), stride=(2, 2), pad=(0, 0), pool_type='max')
         inc3e = conv3
         #incleft
@@ -290,14 +295,15 @@ class pvalite_b5(Symbol):
             print(stage_num[i])
             #inc3/pool
             if i == 0:
-                inc3_right = mx.symbol.Pooling(data=inc3_right, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i == 0 else 1, 0 if i == 0 else 1), pool_type='max')
+                #pad=(0 if i == 0 else 1, 0 if i == 0 else 1)
+                inc3_right = mx.symbol.Pooling(data=conv3, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(1,1), pool_type='max')
             else:
-                inc3_right = mx.symbol.Pooling(data=inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i == 0 else 1, 0 if i == 0 else 1), pool_type='max')
+                inc3_right = mx.symbol.Pooling(data=inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(1,1), pool_type='max')
             for j in range (char_stage):
                 print(stage_char[j])
-                inc3_left = self.inc3_unit_left(inc3_left if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc3_middle = self.inc3_unit_middle(inc3_middle if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc3_right = self.inc3_unit_right(inc3_right if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_left = self.inc3_unit_left(conv3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_middle = self.inc3_unit_middle(relu3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_right = self.inc3_unit_right(conv3 if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
                 inc_concat = inc3_right
