@@ -27,17 +27,20 @@ class pvalite_b5(Symbol):
 
     def inc3_unit_left(self, data, name, workspace=512):
         #pad = 0
-        conv5_1 = mx.symbol.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_1')
+        conv5_1 = mx.symbol.Convolution(data=data,num_filter=16,kernel=(1,1),stride=(1,1),pad=(0,0),no_bias=True,workspace=workspace,name=name+'/conv5_1')
         relu5_1 = mx.symbol.Activation(data=conv5_1, act_type='relu', name=name+'/relu5_1')
         if 'inc4' in name or 'inc5' in name:
-            conv5_2 = mx.symbol.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_2')
+            conv5_2 = mx.symbol.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(2,2),no_bias=True,workspace=workspace,name=name+'/conv5_2')
             relu5_2 = mx.symbol.Activation(data=conv5_2, act_type='relu', name=name+'/relu5_2')
-            conv5_3 = mx.symbol.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
+            conv5_3 = mx.symbol.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),dilate=(2,2),pad=(2,2),no_bias=True,workspace=workspace,name=name+'/conv5_3')
             relu5_3 = mx.symbol.Activation(data=conv5_3, act_type='relu', name=name+'/relu5_3')
         else:
             conv5_2 = mx.symbol.Convolution(data=relu5_1, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_2')
             relu5_2 = mx.symbol.Activation(data=conv5_2, act_type='relu', name=name+'/relu5_2')
-            conv5_3 = mx.symbol.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
+            if 'inc3a' in name:
+                conv5_3 = mx.symbol.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(2,2),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
+            else:
+                conv5_3 = mx.symbol.Convolution(data=relu5_2, num_filter=32,kernel=(3,3),stride=(1,1),pad=(1,1),no_bias=True,workspace=workspace,name=name+'/conv5_3')
             relu5_3 = mx.symbol.Activation(data=conv5_3, act_type='relu', name=name+'/relu5_3')
         return relu5_3
 
@@ -120,8 +123,8 @@ class pvalite_b5(Symbol):
                 inc3_right = self.inc3_unit_right(inc3_right, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
-                inc_concat = mx.symbol.concat(*[inc3_right,inc3_middle])
-                #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
+                #inc_concat = mx.symbol.concat(*[inc3_right,inc3_middle])
+                inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
                 #inc_concat = mx.symbol.concat(*[inc3_right, inc3_left])
                 #print('>>>>> inc_concat')
                 #mx.visualization.print_summary(inc_concat)
