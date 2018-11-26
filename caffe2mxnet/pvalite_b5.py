@@ -23,7 +23,7 @@ class pvalite_b5(Symbol):
         self.test_nbatch= test_nbatch
 
     def get_bbox_param_names(self):
-        return ['rpn_bbox_pred_fabu_weight', 'rpn_bbox_pred_fabu_bias']
+        return ['bbox_pred_weight', 'bbox_pred_bias']
 
     def inc3_unit_left(self, data, name, workspace=512):
         #pad = 0
@@ -186,6 +186,8 @@ class pvalite_b5(Symbol):
             label = mx.symbol.Reshape(data=label, shape=(-1,), name='label_reshape')
             rcnn_label = label
 
+
+
         else:
         #batchsize?? self.test_nbatch
             rpn_cls_prob = mx.symbol.SoftmaxActivation(data=rpn_cls_score_reshape, mode="channel", name='rpn_cls_prob')
@@ -218,21 +220,27 @@ class pvalite_b5(Symbol):
         
         #bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
         bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=4)
+        
+        num_classes = 32
+        if is_train:
         # add from resnet_mx
-        cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
-        num_classes = 81
-        cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
-
+            cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
+            cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
+            num_reg_classes = 1
+            loss_bbox_ = bbox_weight * mx.sym.smooth_l1(name='loss_bbox_', scalar=1.0, data=(bbox_pred_fabu - bbox_target))
+            loss_bbox = mx.sym.MakeLoss(name='loss_bbox', data=loss_bbox_, grad_scale=grad_scale/(188.0*16.0))
+            loss_bbox = mx.sym.Reshape(data=loss_bbox, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 4 * num_reg_classes),
+                                       name='loss_bbox_reshape')
+        else:
+            cls_prob = mx.sym.SoftmaxActivation(name='cls_prob', data=cls_score_fabu)
+            cls_prob = mx.sym.Reshape(data=cls_prob, shape=(self.test_nbatch, -1, num_classes), name='cls_prob_reshape')
+            
         #cls_score_fabu = mx.symbol.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
         #bbox_pred_fabu = mx.symbol.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
         
         #loss_cls = softmaxwithloss
         #label -> labels -> roi-data/labels
-        num_reg_classes = 1
-        loss_bbox_ = bbox_weight * mx.sym.smooth_l1(name='loss_bbox_', scalar=1.0, data=(bbox_pred_fabu - bbox_target))
-        loss_bbox = mx.sym.MakeLoss(name='loss_bbox', data=loss_bbox_, grad_scale=grad_scale/(188.0*16.0))
-        loss_bbox = mx.sym.Reshape(data=loss_bbox, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 4 * num_reg_classes),
-                                       name='loss_bbox_reshape')
+
         #loss_cls = 
         #loss_cls = mx.symbol.CaffeLoss(data = cls_score_fabu, label = label, grad_scale = 1, name='loss_cls', prototxt="layer{type:\"SoftmaxWithLoss\"}")
         #num_weight=?
@@ -407,10 +415,14 @@ class pvalite_b5(Symbol):
         #bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
         bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=4)
         # add from resnet_mx
-        cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
-        num_classes = 81
-        cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
 
+        num_classes = 32
+        if is_train:
+            cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
+            cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
+        else:
+            cls_prob = mx.sym.SoftmaxActivation(name='cls_prob', data=cls_score_fabu)
+            cls_prob = mx.sym.Reshape(data=cls_prob, shape=(self.test_nbatch, -1, num_classes), name='cls_prob_reshape')
         #cls_score_fabu = mx.symbol.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
         #bbox_pred_fabu = mx.symbol.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
         
@@ -453,6 +465,15 @@ class pvalite_b5(Symbol):
         char_stage = 5
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
+
+        arg_params['rpn_cls_score_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_cls_score_fabu_weight'])
+        arg_params['rpn_cls_score_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_fabu_bias'])
+
+        arg_params['rpn_bbox_pred_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
+        arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias'])
+
+        arg_params['bbox_pred_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['bbox_pred_weight'])
+        arg_params['bbox_pred_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['bbox_pred_bias'])
         
         '''
         for i in range (num_stage - 1):
@@ -496,11 +517,12 @@ class pvalite_b5(Symbol):
         arg_params['rpn_conv1_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_conv1_weight'])
         arg_params['rpn_conv1_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_conv1_bias'])
 
-        arg_params['rpn_cls_score_fabu_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_cls_score_fabu_weight'])
+        arg_params['rpn_cls_score_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_cls_score_fabu_weight'])
         arg_params['rpn_cls_score_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_fabu_bias'])
-
-        arg_params['rpn_bbox_pred_fabu_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
+        arg_params['rpn_bbox_pred_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
         arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias'])
+        arg_params['rpn_bbox_pred_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_weight'])
+        arg_params['rpn_bbox_pred_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_bias'])
     
     def init_weight(self, cfg, arg_params, aux_params):
         self.init_weight_rcnn(cfg, arg_params, aux_params)
