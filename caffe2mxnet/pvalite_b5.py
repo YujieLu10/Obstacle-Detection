@@ -116,16 +116,20 @@ class pvalite_b5(Symbol):
             print(stage_num[i])
             #inc3/pool
             #stride=(2 if i == 0 else 1, 2 if i == 0 else 1)
-            inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
-            #inc3_right = mx.symbol.Pooling(data=conv3 if i == 0 else inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(0 if i==0 else 1, 0 if i==0 else 1), pool_type='max')
+            #inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
+            #inc3_right = mx.symbol.Pooling(data=conv3 if i == 0 else inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2,2), pad=(0 if i==0 else 1, 0 if i==0 else 1), pool_type='max')
             for j in range (char_stage):
                 print(stage_char[j])
+                inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
                 inc3_left = self.inc3_unit_left(conv3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_middle = self.inc3_unit_middle(relu3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 #inc3_right if j == 0 else inc_concat
-                inc3_right = self.inc3_unit_right(inc3_right if j == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                inc3_right = self.inc3_unit_right(inc3_right, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                #print('>>>>>>  inc3_left')
+                #print(inc3_left.shape, inc3_middle.shape, inc3_right.shape)
+                inc_concat = mx.symbol.concat(inc3_left, inc3_middle, inc3_right)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
-                inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
+                #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_right])
                 #inc_concat = mx.symbol.concat(*[inc3_middle, inc3_right])
                 #print('>>>>> inc_concat')
@@ -157,9 +161,9 @@ class pvalite_b5(Symbol):
         rpn_relu1 = mx.symbol.Activation(data = rpn_conv1, act_type='relu', name='rpn_relu1')
         #num_filter = 98
         rpn_cls_score_fabu = mx.symbol.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=42,name='rpn_cls_score_fabu')
-        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,2,-1,0),name='rpn_cls_score_reshape')
+        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
         #num_filter=196
-        rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
+        rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, stride=(2,2),kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
 
         # generate anchor ?
         #rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
@@ -173,7 +177,7 @@ class pvalite_b5(Symbol):
             #shae=(0, 98, -1, 0)
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0),name='rpn_cls_prob_reshape')
             proposal, label, bbox_target, bbox_weight = mx.symbol.MultiProposalTarget(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, gt_boxes=gt_boxes, valid_ranges=valid_ranges,  batch_size=16, name='multi_proposal_target')
-            
+            #rpn_bbox_pred_fabu - rpn_bbox_target
             rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
 
             rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
@@ -210,14 +214,14 @@ class pvalite_b5(Symbol):
         #relu7 = mx.symbol.FullyConnected(name = 'relu7', data = fc7_U)
         relu7 = mx.symbol.Activation(data=fc7_U, act_type = 'relu', name='relu7')
 
-        cls_score_fabu = mx.symbol.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=8)
+        cls_score_fabu = mx.symbol.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=81)
         
         #bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
         bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=4)
         # add from resnet_mx
         cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
         num_classes = 81
-        #cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
+        cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
 
         #cls_score_fabu = mx.symbol.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
         #bbox_pred_fabu = mx.symbol.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
@@ -261,6 +265,7 @@ class pvalite_b5(Symbol):
         char_stage = 5
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
+        #filter_list = [96, 128, 128]
         filter_list = [96, 128, 128]
         if is_train:
             data = mx.symbol.Variable(name="data")
@@ -288,30 +293,31 @@ class pvalite_b5(Symbol):
         stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv3')
 
         relu3 = mx.symbol.Activation(data=conv3, act_type='relu', name='relu3')
-        '''
-        inc3_left = conv3
-        inc3_middle = relu3
-        inc3_right = conv3
-        '''
-        conv3_down2 = mx.symbol.Pooling(data=conv3, kernel=(3, 3), stride=(2, 2), pad=(0, 0), pool_type='max')
+
+        #stride=(2, 2)
+        conv3_down2 = mx.symbol.Pooling(data=conv3, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
         inc3e = conv3
         #incleft
         for i in range (num_stage):
             print(stage_num[i])
             #inc3/pool
-            if i == 0:
-                #pad=(0 if i == 0 else 1, 0 if i == 0 else 1)
-                inc3_right = mx.symbol.Pooling(data=conv3, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(1,1), pool_type='max')
-            else:
-                inc3_right = mx.symbol.Pooling(data=inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2 if i == 0 else 1, 2 if i == 0 else 1), pad=(1,1), pool_type='max')
+            #stride=(2 if i == 0 else 1, 2 if i == 0 else 1)
+            #inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
+            #inc3_right = mx.symbol.Pooling(data=conv3 if i == 0 else inc_concat, kernel=(2 if i == 0 else 3, 2 if i == 0 else 3), stride=(2,2), pad=(0 if i==0 else 1, 0 if i==0 else 1), pool_type='max')
             for j in range (char_stage):
                 print(stage_char[j])
+                inc3_right = mx.symbol.Pooling(data=conv3 if i==0 else inc_concat, kernel=(3, 3), stride=(1, 1), pad=(1, 1), pool_type='max')
                 inc3_left = self.inc3_unit_left(conv3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
                 inc3_middle = self.inc3_unit_middle(relu3 if i == 0 else inc_concat, 'inc' + stage_num[i] + stage_char[j], workspace)
-                inc3_right = self.inc3_unit_right(conv3 if i == 0 else inc_concat, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                #inc3_right if j == 0 else inc_concat
+                inc3_right = self.inc3_unit_right(inc3_right, filter_list[i], 'inc' + stage_num[i] + stage_char[j], workspace)
+                #print('>>>>>>  inc3_left')
+                #print(inc3_left.shape, inc3_middle.shape, inc3_right.shape)
+                inc_concat = mx.symbol.concat(inc3_left, inc3_middle, inc3_right)
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle, inc3_right])
                 #inc_concat = mx.symbol.concat(*[inc3_left, inc3_middle])
-                inc_concat = inc3_right
+                #inc_concat = mx.symbol.concat(*[inc3_left, inc3_right])
+                #inc_concat = mx.symbol.concat(*[inc3_middle, inc3_right])
                 #print('>>>>> inc_concat')
                 #mx.visualization.print_summary(inc_concat)
                 #mx.visualization.print_summary(inc_concat,{"data":(1,3,1056,640),"gt_boxes": (1, 100, 5), "label": (1, 23760), "bbox_target": (1, 36, 66, 40), "bbox_weight": (1, 36, 66, 40)})
@@ -319,14 +325,14 @@ class pvalite_b5(Symbol):
                 if stage_char[j] == 'e' and stage_num[i] == '3':
                     inc3e = inc_concat
                     print('>>>>> inc3e = inc_concat')
-        print('>>>>> rpn conv3_down2') 
-        mx.visualization.print_summary(conv3_down2)
+        print('>>>>> rcnn conv3_down2') 
+        #mx.visualization.print_summary(conv3_down2)
         #concat
-        print('>>>>> rpn concat conv3_down2 inc_concat inc3e')
-        #concat = mx.symbol.concat(*[conv3_down2, inc_concat, inc3e])
+        print('>>>>> rcnn concat conv3_down2 inc_concat inc3e')
+        concat = mx.symbol.concat(*[conv3_down2, inc_concat, inc3e])
         #concat = mx.symbol.concat(*[conv3_down2, inc_concat])
-        concat = inc_concat
-        mx.visualization.print_summary(concat)
+        #concat = inc_concat
+        #mx.visualization.print_summary(concat)
         #convf/reluf
         convf = mx.symbol.Convolution(data = concat, num_filter=256, kernel=(1,1), stride=(1,1), pad=(0,0), no_bias = True,  workspace=self.workspace, name='convf')
         reluf = mx.symbol.Activation(data = convf, act_type='relu', name='reluf')
@@ -341,9 +347,9 @@ class pvalite_b5(Symbol):
         rpn_relu1 = mx.symbol.Activation(data = rpn_conv1, act_type='relu', name='rpn_relu1')
         #num_filter = 98
         rpn_cls_score_fabu = mx.symbol.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=42,name='rpn_cls_score_fabu')
-        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,2,-1,0),name='rpn_cls_score_reshape')
+        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
         #num_filter=196
-        rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
+        rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, stride=(2,2),kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
 
         # generate anchor ?
         #rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
@@ -351,23 +357,29 @@ class pvalite_b5(Symbol):
         #data=(rpn_bbox_pred_fabu - rpn_bbox_target)
         #rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
         if is_train:
-            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=rpn_bbox_pred_fabu)
 
-            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
             #data=rpn_cls_score_reshape
             rpn_cls_prob = mx.symbol.SoftmaxOutput(data=rpn_cls_score_reshape, label=rpn_label, multi_output=True, normalization='valid',use_ignore=True, ignore_label=-1,name='rpn_cls_prob',grad_scale=grad_scale)
             #rpn_cls_prob
             #shae=(0, 98, -1, 0)
-            rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 98, -1, 0),name='rpn_cls_prob_reshape')
-            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16,
-            rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
+            rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0),name='rpn_cls_prob_reshape')
+            
+            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape, bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, name='proposal', batch_size=16, rpn_pre_nms_top_n=10000, rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7, feature_stride=16, ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3), scales=(1.5, 3, 6, 9, 16, 32, 48))
+            
+            #rpn_bbox_pred_fabu - rpn_bbox_target
+            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+
+            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
+            
+            #add from resnet_mx
+            label = mx.symbol.Reshape(data=label, shape=(-1,), name='label_reshape')
+            rcnn_label = label
 
         else:
         #batchsize?? self.test_nbatch
             rpn_cls_prob = mx.symbol.SoftmaxActivation(data=rpn_cls_score_reshape, mode="channel", name='rpn_cls_prob')
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0), name='rpn_cls_prob_reshape')
-            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16,
-            rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
+            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16, rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
         
         #rpn_loss_cls =
         #mute_rpn_scores = ?
@@ -390,19 +402,30 @@ class pvalite_b5(Symbol):
         #relu7 = mx.symbol.FullyConnected(name = 'relu7', data = fc7_U)
         relu7 = mx.symbol.Activation(data=fc7_U, act_type = 'relu', name='relu7')
 
-        cls_score_fabu = mx.symbol.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=8)
-        bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
+        cls_score_fabu = mx.symbol.FullyConnected(name = 'cls_score_fabu', data = fc7_U, num_hidden=81)
+        
+        #bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=32)
+        bbox_pred_fabu = mx.symbol.FullyConnected(name = 'bbox_pred_fabu', data = relu7, num_hidden=4)
+        # add from resnet_mx
+        cls_prob = mx.sym.SoftmaxOutput(name='cls_prob', data=cls_score_fabu, label=label, normalization='valid', use_ignore=True, ignore_label=-1, grad_scale=grad_scale)
+        num_classes = 81
+        cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
+
         #cls_score_fabu = mx.symbol.CaffeOp(data_0=fc7_U, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 8}}")
         #bbox_pred_fabu = mx.symbol.CaffeOp(data_0=relu7, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 32}}")
         
         #loss_cls = softmaxwithloss
         #label -> labels -> roi-data/labels
-
+        num_reg_classes = 1
+        loss_bbox_ = bbox_weight * mx.sym.smooth_l1(name='loss_bbox_', scalar=1.0, data=(bbox_pred_fabu - bbox_target))
+        loss_bbox = mx.sym.MakeLoss(name='loss_bbox', data=loss_bbox_, grad_scale=grad_scale/(188.0*16.0))
+        loss_bbox = mx.sym.Reshape(data=loss_bbox, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 4 * num_reg_classes),
+                                       name='loss_bbox_reshape')
         #loss_cls = 
         #loss_cls = mx.symbol.CaffeLoss(data = cls_score_fabu, label = label, grad_scale = 1, name='loss_cls', prototxt="layer{type:\"SoftmaxWithLoss\"}")
         #num_weight=?
         #loss_bbox = ? smoothl1loss
-        
+
         fc6_L_kp = mx.symbol.FullyConnected(name = 'fc6_L_kp', data = fc7_U, num_hidden=512)
         #fc6_L_kp = mx.symbol.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type: \"InnerProduct\"inner_product_param {num_output: 512}}")
         fc6_U_kp = mx.symbol.FullyConnected(name = 'fc6_U_kp', data = fc6_L_kp, num_hidden=4096)
