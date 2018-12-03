@@ -5,7 +5,11 @@ import numpy as np
 
 def checkpoint_callback(bbox_param_names, prefix, means, stds):
     def _callback(iter_no, sym, arg, aux):
-        weight = arg[bbox_param_names[0]]
+        print('>>>>> bbox_param_names')
+        print(bbox_param_names[0])
+        print('>>>>> arg')
+        print(arg)
+        weight = arg[bbox_param_names[0]]        
         bias = arg[bbox_param_names[1]]
         stds = np.array([0.1, 0.1, 0.2, 0.2])
         arg[bbox_param_names[0] + '_test'] = (weight.T * mx.nd.array(stds)).T
@@ -23,7 +27,7 @@ class pvalite_b5(Symbol):
         self.test_nbatch= test_nbatch
 
     def get_bbox_param_names(self):
-        return ['bbox_pred_weight', 'bbox_pred_bias']
+        return ['bbox_pred_fabu_weight', 'bbox_pred_fabu_bias']
 
     def inc3_unit_left(self, data, name, workspace=512):
         #pad = 0
@@ -161,15 +165,18 @@ class pvalite_b5(Symbol):
         rpn_relu1 = mx.symbol.Activation(data = rpn_conv1, act_type='relu', name='rpn_relu1')
         #num_filter = 98
         rpn_cls_score_fabu = mx.symbol.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=42,name='rpn_cls_score_fabu')
-        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
+        if is_train:
+            rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
+        else:
+            rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,2,-1,0),name='rpn_cls_score_reshape')
         #num_filter=196
         rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, stride=(2,2),kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
 
         # generate anchor ?
         #rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
-        #rpn_loss_bbox
+        #rpn_bbox_loss
         #data=(rpn_bbox_pred_fabu - rpn_bbox_target)
-        #rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+        #rpn_bbox_loss = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_bbox_loss',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
         if is_train:
             #data=rpn_cls_score_reshape
             rpn_cls_prob = mx.symbol.SoftmaxOutput(data=rpn_cls_score_reshape, label=rpn_label, multi_output=True, normalization='valid',use_ignore=True, ignore_label=-1,name='rpn_cls_prob',grad_scale=grad_scale)
@@ -178,10 +185,12 @@ class pvalite_b5(Symbol):
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0),name='rpn_cls_prob_reshape')
             proposal, label, bbox_target, bbox_weight = mx.symbol.MultiProposalTarget(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, gt_boxes=gt_boxes, valid_ranges=valid_ranges,  batch_size=16, name='multi_proposal_target')
             #rpn_bbox_pred_fabu - rpn_bbox_target
-            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+            rpn_bbox_loss_ = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_bbox_loss_', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
 
-            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
-            
+            rpn_bbox_loss = mx.symbol.MakeLoss(name='rpn_bbox_loss', data=rpn_bbox_loss_,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
+            #print('>>>>>>> rpn_bbox_pred_fabu {}'.format(rpn_bbox_pred_fabu))
+            #print('>>>>>>> rpn_bbox_target  {}'.format(rpn_bbox_target))
+            #print('>>>>>>> proposal  {}'.format(proposal))
             #add from resnet_mx
             label = mx.symbol.Reshape(data=label, shape=(-1,), name='label_reshape')
             rcnn_label = label
@@ -193,7 +202,7 @@ class pvalite_b5(Symbol):
             rpn_cls_prob = mx.symbol.SoftmaxActivation(data=rpn_cls_score_reshape, mode="channel", name='rpn_cls_prob')
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0), name='rpn_cls_prob_reshape')
             proposal, _ = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16,
-            rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
+            rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.5, 1, 2), scales=(2, 4, 7, 10, 13, 16, 24))
         
         #rpn_loss_cls =
         #mute_rpn_scores = ?
@@ -201,7 +210,7 @@ class pvalite_b5(Symbol):
 
         #roi_data python?
         #roi_data = 
-        roi_pool_conv5 = mx.symbol.ROIPooling(data = data, rois = proposal, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
+        roi_pool_conv5 = mx.symbol.ROIPooling(data = reluf, rois = proposal, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
 
         fc6_L = mx.symbol.FullyConnected(name='fc6_L', data=roi_pool_conv5, num_hidden=512)
         #fc6_L = mx.symbol.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type:\"InnerProduct\" inner_product_param {num_output: 512}}")
@@ -232,6 +241,8 @@ class pvalite_b5(Symbol):
             loss_bbox = mx.sym.Reshape(data=loss_bbox, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 4 * num_reg_classes),
                                        name='loss_bbox_reshape')
         else:
+            num_reg_classes = 1
+            bbox_pred_fabu = mx.sym.Reshape(data=bbox_pred_fabu, shape=(self.test_nbatch, -1, 4 * num_reg_classes), name='bbox_pred_fabu')
             cls_prob = mx.sym.SoftmaxActivation(name='cls_prob', data=cls_score_fabu)
             cls_prob = mx.sym.Reshape(data=cls_prob, shape=(self.test_nbatch, -1, num_classes), name='cls_prob_reshape')
             
@@ -261,7 +272,7 @@ class pvalite_b5(Symbol):
         #loss_3d = smoothl1loss
 
         if is_train:
-            group = mx.symbol.Group([rpn_cls_prob, rpn_loss_bbox, cls_prob, loss_bbox, mx.sym.BlockGrad(rcnn_label)])
+            group = mx.symbol.Group([rpn_cls_prob, rpn_bbox_loss, cls_prob, loss_bbox, mx.sym.BlockGrad(rcnn_label)])
         else:
             group = mx.symbol.Group([proposal, rpn_cls_prob, bbox_pred_fabu, im_ids])
         self.sym = group
@@ -355,15 +366,18 @@ class pvalite_b5(Symbol):
         rpn_relu1 = mx.symbol.Activation(data = rpn_conv1, act_type='relu', name='rpn_relu1')
         #num_filter = 98
         rpn_cls_score_fabu = mx.symbol.Convolution(data = rpn_relu1, kernel=(1,1),pad=(0,0),num_filter=42,name='rpn_cls_score_fabu')
-        rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
+        if is_train:
+            rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,8,-1,0),name='rpn_cls_score_reshape')
+        else:
+            rpn_cls_score_reshape = mx.symbol.Reshape(data = rpn_cls_score_fabu, shape=(0,2,-1,0),name='rpn_cls_score_reshape')
         #num_filter=196
         rpn_bbox_pred_fabu = mx.symbol.Convolution(data=rpn_relu1, stride=(2,2),kernel=(1,1),pad=(0,0),num_filter=84,name='rpn_bbox_pred_fabu')
 
         # generate anchor ?
         #rpn_data = mx.nd.contrib.MultiBoxPrior(data = data, sizes=[1.5, 3, 6, 9, 16, 32, 48],ratios=[0.333, 0.5, 0.667, 1.0, 1.5, 2.0, 3.0],steps=[16,16],name='rpn_data')
-        #rpn_loss_bbox
+        #rpn_bbox_loss
         #data=(rpn_bbox_pred_fabu - rpn_bbox_target)
-        #rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+        #rpn_bbox_loss = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_bbox_loss',scalar=1.0,data=(rpn_bbox_pred_fabu - rpn_bbox_target))
         if is_train:
 
             #data=rpn_cls_score_reshape
@@ -372,12 +386,12 @@ class pvalite_b5(Symbol):
             #shae=(0, 98, -1, 0)
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0),name='rpn_cls_prob_reshape')
             
-            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape, bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, name='proposal', batch_size=16, rpn_pre_nms_top_n=10000, rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7, feature_stride=16, ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3), scales=(1.5, 3, 6, 9, 16, 32, 48))
+            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape, bbox_pred=rpn_bbox_pred_fabu, im_info=im_info, name='proposal', batch_size=16, rpn_pre_nms_top_n=10000, rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7, feature_stride=16, ratios=(0.5, 1, 2), scales=(2, 4, 7, 10, 13, 16, 24))
             
             #rpn_bbox_pred_fabu - rpn_bbox_target
-            rpn_loss_bbox = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_loss_bbox', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
+            rpn_bbox_loss_ = rpn_bbox_weight * mx.symbol.smooth_l1(name='rpn_bbox_loss_', scalar=1.0, data=(rpn_bbox_pred_fabu - rpn_bbox_target))
 
-            rpn_loss_bbox = mx.symbol.MakeLoss(name='rpn_loss_bbox', data=rpn_loss_bbox,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
+            rpn_bbox_loss = mx.symbol.MakeLoss(name='rpn_bbox_loss', data=rpn_bbox_loss_,grad_scale=3*grad_scale / float(cfg.TRAIN.BATCH_IMAGES * cfg.TRAIN.RPN_BATCH_SIZE))
             
             #add from resnet_mx
             label = mx.symbol.Reshape(data=label, shape=(-1,), name='label_reshape')
@@ -387,7 +401,7 @@ class pvalite_b5(Symbol):
         #batchsize?? self.test_nbatch
             rpn_cls_prob = mx.symbol.SoftmaxActivation(data=rpn_cls_score_reshape, mode="channel", name='rpn_cls_prob')
             rpn_cls_prob_reshape = mx.symbol.Reshape(data=rpn_cls_prob, shape=(0, 2, -1, 0), name='rpn_cls_prob_reshape')
-            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16, rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.333, 0.5, 0.667, 1, 1.5, 2, 3),scales=(1.5, 3, 6, 9, 16, 32, 48))
+            proposal, rpn_scores = mx.symbol.MultiProposal(cls_prob=rpn_cls_prob_reshape,bbox_pred=rpn_bbox_pred_fabu, im_info=im_info,name='proposal', batch_size=16, rpn_pre_nms_top_n=10000,rpn_post_nms_top_n=2000, rpn_min_size=8, threshold=0.7,feature_stride=16,ratios=(0.5, 1, 2), scales=(2, 4, 7, 10, 13, 16, 24))
         
         #rpn_loss_cls =
         #mute_rpn_scores = ?
@@ -395,7 +409,7 @@ class pvalite_b5(Symbol):
 
         #roi_data python?
         #roi_data = 
-        roi_pool_conv5 = mx.symbol.ROIPooling(data = data, rois = proposal, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
+        roi_pool_conv5 = mx.symbol.ROIPooling(data = reluf, rois = proposal, pooled_size = (6, 6), spatial_scale=0.0625, name = 'roi_pool_conv5')
 
         fc6_L = mx.symbol.FullyConnected(name='fc6_L', data=roi_pool_conv5, num_hidden=512)
         #fc6_L = mx.symbol.CaffeOp(data_0=roi_pool_conv5, prototxt="layer {type:\"InnerProduct\" inner_product_param {num_output: 512}}")
@@ -453,7 +467,7 @@ class pvalite_b5(Symbol):
         #loss_3d = smoothl1loss
 
         if is_train:
-            group = mx.symbol.Group([rpn_cls_prob, rpn_loss_bbox])
+            group = mx.symbol.Group([rpn_cls_prob, rpn_bbox_loss])
         else:
             group = mx.symbol.Group([proposal, rpn_cls_prob, bbox_pred_fabu, im_ids])
         self.sym = group
@@ -463,8 +477,12 @@ class pvalite_b5(Symbol):
         # weight xavier
         num_stage = 3
         char_stage = 5
+        #print('>>>>>>> rcnn arg_parmas {}'.format(arg_params))
         stage_num = ['3', '4', '5']
         stage_char = ['a', 'b', 'c', 'd', 'e']
+
+        arg_params['rpn_conv1_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_conv1_weight'])
+        arg_params['rpn_conv1_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_conv1_bias'])
 
         arg_params['rpn_cls_score_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_cls_score_fabu_weight'])
         arg_params['rpn_cls_score_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_fabu_bias'])
@@ -472,8 +490,21 @@ class pvalite_b5(Symbol):
         arg_params['rpn_bbox_pred_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
         arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias'])
 
-        arg_params['bbox_pred_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['bbox_pred_weight'])
-        arg_params['bbox_pred_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['bbox_pred_bias'])
+        #arg_params['convf_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['convf_weight'])
+        #arg_params['convf_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['convf_bias'])
+
+        arg_params['fc6_L_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['fc6_L_weight'])
+        arg_params['fc6_L_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['fc6_L_bias'])
+        arg_params['fc6_U_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['fc6_U_weight'])
+        arg_params['fc6_U_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['fc6_U_bias'])
+        arg_params['fc7_L_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['fc7_L_weight'])
+        arg_params['fc7_L_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['fc7_L_bias'])
+        arg_params['fc7_U_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['fc7_U_weight'])
+        arg_params['fc7_U_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['fc7_U_bias'])
+        #print('>>>>> arg_shape_dict')
+        #print(self.arg_shape_dict)
+        arg_params['bbox_pred_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['bbox_pred_fabu_weight'])
+        arg_params['bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['bbox_pred_fabu_bias'])
         
         '''
         for i in range (num_stage - 1):
@@ -514,6 +545,7 @@ class pvalite_b5(Symbol):
         '''
     
     def init_weight_rpn(self, cfg, arg_params, aux_params):
+        #print('>>>>>> rpn arg_params {}'.format(arg_params))
         arg_params['rpn_conv1_weight'] = mx.nd.zeros(shape = self.arg_shape_dict['rpn_conv1_weight'])
         arg_params['rpn_conv1_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_conv1_bias'])
 
@@ -521,8 +553,8 @@ class pvalite_b5(Symbol):
         arg_params['rpn_cls_score_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_fabu_bias'])
         arg_params['rpn_bbox_pred_fabu_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_fabu_weight'])
         arg_params['rpn_bbox_pred_fabu_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_fabu_bias'])
-        arg_params['rpn_bbox_pred_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_weight'])
-        arg_params['rpn_bbox_pred_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_bias'])
+        #arg_params['rpn_bbox_pred_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_bbox_pred_weight'])
+        #arg_params['rpn_bbox_pred_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_bbox_pred_bias'])
     
     def init_weight(self, cfg, arg_params, aux_params):
         self.init_weight_rcnn(cfg, arg_params, aux_params)
