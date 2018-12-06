@@ -1,4 +1,5 @@
 1 Introduction
+:+1:
 Our observation is that the convolutional feature maps used by region-based detectors, like Fast RCNN, can also be used  for generating region proposals.
 
 RPN : a kind of FCN and can be trained end-to-end specifically for the task for generating detection proposals
