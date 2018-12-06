@@ -1,0 +1,65 @@
+1 Introduction
+Our observation is that the convolutional feature maps used by region-based detectors, like Fast RCNN, can also be used  for generating region proposals.
+
+RPN : a kind of FCN and can be trained end-to-end specifically for the task for generating detection proposals
+
+prevalent methods : pyramids of images or pyramids of filters
+pyramid of regression references
+
+2 Related work
+- Object Proposals
+    - comprehensive surveys and comparisons of object proposal methods
+    - widely used object proposal methods, based on grouping super-pixels Selective Search, CPMC, MCG and sliding windows, EdgeBoxes.
+    - adopted as external modules independent of the detectors(Selective Search object detectors, RCNN, and Fast R-CNN)
+
+- Deep Networks for Object Detection
+
+3 Faster R-CNN
+Faster R-CNN : a single, unified network for object detection
+- first module
+    - a deep fully convolutional network that proposes regions
+- second module
+    - Fast R-CNN detector that uses the proposed regions
+
+3.1 Region Proposal Networks
+Input : an image of any size
+Output : a set of rectangular object proposals, each with an objectness score
+
+generate region proposals : slide a small network over the convolutional feature map output by the last shared convolutional layer -> input : n * n spatial window of the input convolutional feature map
+sliding window ->map-> lower-dimensional feature(256-d for ZF and 512-d for VGG, with ReLU following) ->fed-> two sibling fully-connected layers : a box-regression layer(reg) and a box-classification layer(cls)
+
+3.1.1 Anchors
+each sliding-window location -> k maximum possible proposals -> 4k outputs(reg layer) 2k scores(probability of object or not object)
+by default, 3 scales and 3 aspect ratios
+a convolutional feature map of a size W * H -> WHk anchors in total
+
+Translation-Invariant Anchors
+anchors and functions that compute proposals relative to the anchors
+reduces the model size
+
+Multi-Scale Anchors as Regression References
+2 popular ways for multi-scale predictions
+1. image/feature pyramids : images resized at multiple scales, and feature maps or deep convolutional features are computed for each scale -> useful but time-consuming
+2. sliding windows of multiple scales(and/or aspect retios) on the feature maps
+
+our anchor-based method : built on a pyramid of anchors
+
+3.1.2 Loss Function
+assign a binary class label (object or not) to each anchor
+positive label to two kinds of anchors
+(i) the anchor/anchors with the highest Intersection-over-Union(IoU) overlap with a ground-truth box
+(ii) an anchor that has an IoU overlap higher than 0.7 with any ground-truth box
+
+3.2 Sharing Features for RPN and Fast R-CNN
+3 ways for training networks with features shared
+(i)Alternating training
+train RPN -> use the proposals to train Fast R-CNN -> network tuned by Fast R-CNN is then used to initialize RPN -> iterate
+(ii)Approximate joint training
+RPN and Fast R-CNN networks are merged into one network during training.
+(iii)Non-approximate joint training
+input:convolutional features and also the predicted bounding boxes -> RoI pooling layer in Fast R-CNN
+
+##### 4-Step Alternating Training
+
+adopt a pragmatic 4-step training algorithm to learn shared features via alternating optimization
+
