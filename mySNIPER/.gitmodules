@@ -1,0 +1,3 @@
+[submodule "SNIPER-mxnet"]
+	path = SNIPER-mxnet
+	url = https://github.com/mahyarnajibi/SNIPER-mxnet
