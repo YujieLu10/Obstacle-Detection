@@ -240,7 +240,6 @@ class pvalite_b5(Symbol):
         # shared convolutional layers
         #yujie
         data = mx.sym.BatchNorm(data=data, fix_gamma=True, eps=2e-5, use_global_stats=True, name='bn_data')
-        
         #yujie
         conv1 = mx.symbol.Convolution(data=data, num_filter = 32, kernel=(4, 4), stride=(2, 2), pad=(1, 1), no_bias=True, workspace=workspace, name='conv1')
         #if fp16:
@@ -666,7 +665,7 @@ class pvalite_b5(Symbol):
     def add_arg(self, arg_params, name):
         if self.arg_shape_dict.has_key(name + '_weight'):
             print('>>>>>> add arg {}'.format(name+'weight'))
-            arg_params[name + '_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict[name + '_weight'])
+            arg_params[name + '_weight'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_weight'])
         if self.arg_shape_dict.has_key(name + '_bias'):
             print('>>>>>> add arg {}'.format(name+'bias'))
             arg_params[name + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[name + '_bias'])
