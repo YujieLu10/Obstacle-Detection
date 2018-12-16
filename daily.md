@@ -1,4 +1,5 @@
-### daily
+### weekly work note
+
 1. 配置caffe-priv环境，训练2D障碍物检测模型，基于obstacle2d_8cls_train0716_sub3数据集200000iteration的caffe model训练完成，测试训练的caffe model，熟悉工程。
 2. survey论文，Deep Learning for Generic Object Detection了解目标检测的近期成果，阅读SNIPER论文，熟悉SNIPER工程，复现https://github.com/mahyarnajibi/SNIPER
 3. 在我们的dataset上使用SNIPER，首先制作了 convert2coco_train.py 与 conver2coco_val.py 将train0829.txt与val0629.txt文件列表中的数据格式转换为coco的标准数据格式，存入data/coco/annotations中的instances_train.json中
