@@ -10,6 +10,7 @@ recognition accuracy; model complexity; computational complexity; memory usage; 
 
 AlexNet, the first DNN presented in the literature in 2012
 
+
 ### 2. Benchmarking
 
 ### 3. Architectures
