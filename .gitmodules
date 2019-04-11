@@ -1,0 +1,3 @@
+[submodule "OBJdetection/SNIPER-mxnet"]
+	path = OBJdetection/SNIPER-mxnet
+	url = https://github.com/mahyarnajibi/SNIPER-mxnet.git
